@@ -10,9 +10,10 @@ use syntect::{
     util::LinesWithEndings,
 };
 
-/// Loading the default syntax definitions deserializes a few megabytes, so share
-/// one set across every highlighter instance.
-static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
+/// Loading the syntax definitions deserializes a few megabytes, so share one
+/// set across every highlighter instance. HERDR: two-face's set is Syntect's
+/// defaults plus bat's grammars (go.mod, Dockerfile, TOML, ...).
+static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(two_face::syntax::extra_newlines);
 
 /// A small, WASM-compatible example adapter for Base's parser-independent
 /// highlighting API. Syntect identifies scopes; the application-owned resolver
