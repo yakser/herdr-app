@@ -10,6 +10,67 @@ use syntect::{
     util::LinesWithEndings,
 };
 
+mod gomod;
+
+/// Styles a whole document: ordered, non-overlapping byte ranges named from
+/// the vocabulary editors theme (`keyword`, `string`, `constant`, `comment`,
+/// `number`, `function`, `type`).
+type Lexer = fn(&str) -> Vec<(Range<usize>, &'static str)>;
+
+// HERDR: languages Syntect has no grammar for, matched by exact name before
+// Syntect is asked. Formats known by file name (`go.mod`) use it as the name.
+const LEXERS: &[(&str, Lexer)] = &[("go.mod", gomod::highlights)];
+
+/// The highlighter for an editor's `language`, None when it is unknown.
+pub(crate) fn highlighter(language: &str) -> Option<Box<dyn InputHighlighter>> {
+    if let Some(&(language, lex)) = LEXERS.iter().find(|(name, _)| *name == language) {
+        return Some(Box::new(LexerHighlighter {
+            language,
+            lex,
+            highlights: Vec::new(),
+        }));
+    }
+    SyntectHighlighter::new(language)
+        .map(|highlighter| Box::new(highlighter) as Box<dyn InputHighlighter>)
+}
+
+/// Highlights one of the `LEXERS` languages.
+struct LexerHighlighter {
+    language: &'static str,
+    lex: Lexer,
+    /// Non-overlapping highlights, ordered by start offset.
+    highlights: Vec<(Range<usize>, &'static str)>,
+}
+
+impl InputHighlighter for LexerHighlighter {
+    fn language(&self) -> SharedString {
+        self.language.into()
+    }
+
+    fn update(
+        &mut self,
+        _edit: Option<InputEdit>,
+        text: &Rope,
+        _folding: bool,
+        _window: &mut Window,
+        _cx: &mut Context<EditorState>,
+    ) {
+        self.highlights = (self.lex)(&text.to_string());
+    }
+
+    fn styles(
+        &self,
+        range: &Range<usize>,
+        resolver: &dyn HighlightStyleResolver,
+    ) -> Vec<(Range<usize>, HighlightStyle)> {
+        resolve_styles(&self.highlights, range, resolver)
+    }
+
+    fn fold_ranges(&self, _: &Rope) -> Vec<FoldRange> {
+        Vec::new()
+    }
+}
+
 /// Loading the default syntax definitions deserializes a few megabytes, so share
 /// one set across every highlighter instance.
 static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_newlines);
@@ -17,7 +78,7 @@ static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(SyntaxSet::load_defaults_
 /// A small, WASM-compatible example adapter for Base's parser-independent
 /// highlighting API. Syntect identifies scopes; the application-owned resolver
 /// supplies all colors and font styles.
-pub(crate) struct SyntectHighlighter {
+struct SyntectHighlighter {
     language: SharedString,
     /// Non-overlapping highlights, ordered by start offset.
     highlights: Vec<(Range<usize>, &'static str)>,
@@ -28,7 +89,7 @@ pub(crate) struct SyntectHighlighter {
 }
 
 impl SyntectHighlighter {
-    pub(crate) fn new(language: &str) -> Option<Self> {
+    fn new(language: &str) -> Option<Self> {
         find_syntax(language)?;
 
         Some(Self {
