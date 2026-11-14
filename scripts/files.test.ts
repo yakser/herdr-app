@@ -127,3 +127,17 @@ test("Files follows directory links one level at a time", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("Files picks the preview language by whole file name, then extension", () => {
+  const { language, BY_NAME } = new Function(`${source.slice(source.indexOf("const LANG ="), source.indexOf("const PER_FOLDER"))}; return { language, BY_NAME };`)();
+  // Each named file picks its language in any folder, and only by its exact name.
+  for (const [name, expected] of BY_NAME) {
+    expect(language(name)).toBe(expected);
+    expect(language(`sub/dir/${name}`)).toBe(expected);
+    for (const other of [`x${name}`, `${name}x`]) expect(language(other)).not.toBe(expected);
+  }
+  // Anything else goes by the extension of its name.
+  for (const [path, expected] of [
+    ["main.go", "go"], ["app.ts", "js"], ["Makefile", "txt"], ["a.b/Makefile", "txt"], ["sub/constructor", "txt"],
+  ]) expect(language(path)).toBe(expected);
+});

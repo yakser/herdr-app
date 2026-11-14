@@ -475,14 +475,7 @@ impl EntityStore {
                 .soft_wrap(options.soft_wrap);
             state.set_readonly(options.readonly, cx);
             state.set_editor_style(style);
-            state.set_highlighter_factory(
-                Rc::new(|language| {
-                    crate::syntax::SyntectHighlighter::new(language).map(|highlighter| {
-                        Box::new(highlighter) as Box<dyn gpui_base::input::InputHighlighter>
-                    })
-                }),
-                cx,
-            );
+            state.set_highlighter_factory(Rc::new(crate::syntax::highlighter), cx);
             state
         });
         state.update(cx, |state, cx| state.set_value(options.value, window, cx));
